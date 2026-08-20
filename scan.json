@@ -1,0 +1,440 @@
+﻿{
+  "tool": "larsm",
+  "version": "0.1.0",
+  "target": "samples",
+  "fail_on": "HIGH",
+  "results": [
+    {
+      "path": "samples\\benign_reduce.pkl",
+      "format": "raw-pickle",
+      "size_bytes": 63,
+      "max_severity": "HIGH",
+      "findings": [
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected raw-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.suspicious_import",
+          "severity": "HIGH",
+          "title": "Pickle imports from a module with no place in a model file",
+          "detail": "benign_reduce.pkl: imports from process/network/interpreter modules: __builtin__.print",
+          "remediation": "Do not load. Prefer a safetensors build of the same model.",
+          "evidence": {
+            "source": "benign_reduce.pkl",
+            "imports": [
+              {
+                "import": "__builtin__.print",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "benign_reduce.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "benign_reduce.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\clean_model.gguf",
+      "format": "gguf",
+      "size_bytes": 119,
+      "max_severity": "INFO",
+      "findings": [
+        {
+          "check": "format.data_only",
+          "severity": "INFO",
+          "title": "Format does not execute code on load",
+          "detail": "Detected gguf. These formats are data containers, which removes the deserialisation-RCE class. Header and metadata parsing arrives in Sprint 2; until then this file has only been format-identified, not inspected.",
+          "remediation": "",
+          "evidence": {
+            "format": "gguf"
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\clean_model.safetensors",
+      "format": "safetensors",
+      "size_bytes": 144,
+      "max_severity": "INFO",
+      "findings": [
+        {
+          "check": "format.data_only",
+          "severity": "INFO",
+          "title": "Format does not execute code on load",
+          "detail": "Detected safetensors. These formats are data containers, which removes the deserialisation-RCE class. Header and metadata parsing arrives in Sprint 2; until then this file has only been format-identified, not inspected.",
+          "remediation": "",
+          "evidence": {
+            "format": "safetensors"
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\format_confusion.safetensors",
+      "format": "raw-pickle",
+      "size_bytes": 58,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "format.extension_mismatch",
+          "severity": "CRITICAL",
+          "title": "Executable format disguised with a safe-looking extension",
+          "detail": "Extension '.safetensors' implies safetensors, but the bytes are raw-pickle. A pickle renamed to a data-only extension is a deliberate bypass of extension-based allowlists.",
+          "remediation": "Do not load. Verify the file's origin and integrity.",
+          "evidence": {
+            "extension": ".safetensors",
+            "detected": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.dangerous_import",
+          "severity": "CRITICAL",
+          "title": "Pickle imports a known code-execution primitive",
+          "detail": "format_confusion.safetensors: the stream imports nt.system. Combined with a REDUCE-family opcode this executes on load.",
+          "remediation": "Treat this file as hostile. Delete it and obtain the model in safetensors or GGUF form from the publisher.",
+          "evidence": {
+            "source": "format_confusion.safetensors",
+            "imports": [
+              {
+                "import": "nt.system",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected raw-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "format_confusion.safetensors: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "format_confusion.safetensors",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\simulated_rce_proto2.pkl",
+      "format": "raw-pickle",
+      "size_bytes": 58,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "pickle.dangerous_import",
+          "severity": "CRITICAL",
+          "title": "Pickle imports a known code-execution primitive",
+          "detail": "simulated_rce_proto2.pkl: the stream imports nt.system. Combined with a REDUCE-family opcode this executes on load.",
+          "remediation": "Treat this file as hostile. Delete it and obtain the model in safetensors or GGUF form from the publisher.",
+          "evidence": {
+            "source": "simulated_rce_proto2.pkl",
+            "imports": [
+              {
+                "import": "nt.system",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected raw-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "simulated_rce_proto2.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "simulated_rce_proto2.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\simulated_rce_proto4.pkl",
+      "format": "raw-pickle",
+      "size_bytes": 64,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "pickle.dangerous_import",
+          "severity": "CRITICAL",
+          "title": "Pickle imports a known code-execution primitive",
+          "detail": "simulated_rce_proto4.pkl: the stream imports nt.system. Combined with a REDUCE-family opcode this executes on load.",
+          "remediation": "Treat this file as hostile. Delete it and obtain the model in safetensors or GGUF form from the publisher.",
+          "evidence": {
+            "source": "simulated_rce_proto4.pkl",
+            "imports": [
+              {
+                "import": "nt.system",
+                "offset": 25
+              }
+            ]
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected raw-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "simulated_rce_proto4.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "simulated_rce_proto4.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\simulated_rce_torch_style.bin",
+      "format": "zip-pickle",
+      "size_bytes": 416,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "pickle.dangerous_import",
+          "severity": "CRITICAL",
+          "title": "Pickle imports a known code-execution primitive",
+          "detail": "archive/data.pkl: the stream imports nt.system. Combined with a REDUCE-family opcode this executes on load.",
+          "remediation": "Treat this file as hostile. Delete it and obtain the model in safetensors or GGUF form from the publisher.",
+          "evidence": {
+            "source": "archive/data.pkl",
+            "imports": [
+              {
+                "import": "nt.system",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected zip-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "zip-pickle"
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "archive/data.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "archive/data.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "samples\\truncated.pkl",
+      "format": "raw-pickle",
+      "size_bytes": 29,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "pickle.dangerous_import",
+          "severity": "CRITICAL",
+          "title": "Pickle imports a known code-execution primitive",
+          "detail": "truncated.pkl: the stream imports nt.system. Combined with a REDUCE-family opcode this executes on load.",
+          "remediation": "Treat this file as hostile. Delete it and obtain the model in safetensors or GGUF form from the publisher.",
+          "evidence": {
+            "source": "truncated.pkl",
+            "imports": [
+              {
+                "import": "nt.system",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected raw-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "raw-pickle"
+          }
+        },
+        {
+          "check": "pickle.malformed",
+          "severity": "HIGH",
+          "title": "Pickle stream is malformed or truncated",
+          "detail": "truncated.pkl: parsing stopped after 3 opcode(s). A stream that a parser rejects may still be partially processed by a permissive loader, and corruption here is a common fuzzing/exploitation artefact.",
+          "remediation": "Do not load this file. Re-download from a trusted source.",
+          "evidence": {
+            "source": "truncated.pkl",
+            "opcodes_parsed": 3,
+            "error": "expected 29 bytes in a unicodestring4, but only 9 remain"
+          }
+        }
+      ],
+      "errors": [
+        "truncated.pkl: pickle stream could not be fully parsed: expected 29 bytes in a unicodestring4, but only 9 remain"
+      ]
+    },
+    {
+      "path": "samples\\zip_slip.pt",
+      "format": "zip-pickle",
+      "size_bytes": 606,
+      "max_severity": "CRITICAL",
+      "findings": [
+        {
+          "check": "zip.path_traversal",
+          "severity": "CRITICAL",
+          "title": "Archive member escapes the extraction directory (zip-slip)",
+          "detail": "Member '../../larsm_escaped.pkl' contains an absolute or parent-relative path. An extractor that joins this onto a base directory writes outside it \u2014 the same primitive as CVE-2024-37032 in Ollama.",
+          "remediation": "Delete this archive. Do not extract or load it.",
+          "evidence": {
+            "member": "../../larsm_escaped.pkl"
+          }
+        },
+        {
+          "check": "format.pickle_based",
+          "severity": "HIGH",
+          "title": "File uses a pickle-based format that executes code on load",
+          "detail": "Detected zip-pickle. Python's pickle protocol is a small program: loading it can import arbitrary modules and call arbitrary callables. This risk exists regardless of whether a malicious payload is present.",
+          "remediation": "Prefer safetensors or GGUF. If you must load a pickle checkpoint, use torch.load(..., weights_only=True) and load only from sources you trust.",
+          "evidence": {
+            "format": "zip-pickle"
+          }
+        },
+        {
+          "check": "pickle.suspicious_import",
+          "severity": "HIGH",
+          "title": "Pickle imports from a module with no place in a model file",
+          "detail": "archive/data.pkl: imports from process/network/interpreter modules: __builtin__.print",
+          "remediation": "Do not load. Prefer a safetensors build of the same model.",
+          "evidence": {
+            "source": "archive/data.pkl",
+            "imports": [
+              {
+                "import": "__builtin__.print",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "pickle.suspicious_import",
+          "severity": "HIGH",
+          "title": "Pickle imports from a module with no place in a model file",
+          "detail": "../../larsm_escaped.pkl: imports from process/network/interpreter modules: __builtin__.print",
+          "remediation": "Do not load. Prefer a safetensors build of the same model.",
+          "evidence": {
+            "source": "../../larsm_escaped.pkl",
+            "imports": [
+              {
+                "import": "__builtin__.print",
+                "offset": 2
+              }
+            ]
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "archive/data.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "archive/data.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        },
+        {
+          "check": "pickle.execution_opcodes",
+          "severity": "MEDIUM",
+          "title": "Pickle contains callable-invoking opcodes",
+          "detail": "../../larsm_escaped.pkl: found 1 opcode(s) of type REDUCE. Every legitimate PyTorch checkpoint also contains these, so this is context, not a verdict on its own.",
+          "remediation": "Use torch.load(..., weights_only=True) where loading is unavoidable, or migrate to safetensors.",
+          "evidence": {
+            "source": "../../larsm_escaped.pkl",
+            "opcodes": [
+              "REDUCE"
+            ],
+            "count": 1
+          }
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

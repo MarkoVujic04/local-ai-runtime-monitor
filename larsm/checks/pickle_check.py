@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterable
 
 from ..findings import Finding, Severity
+from ..pathsafety import looks_like_traversal
 
 MAX_OPCODES = 1_000_000
 MAX_ZIP_MEMBERS = 500
@@ -58,23 +59,9 @@ GADGET_MODULES = frozenset({"codecs", "_codecs", "base64", "binascii", "operator
 
 ALLOWED_MODULE_PREFIXES = ("torch", "torchvision", "numpy", "collections", "__torch__")
 
-_TRAVERSAL_MARKERS = ("../", "..\\", "%2e%2e", "..%2f", "..%5c")
-_ABSOLUTE_PREFIXES = ("/etc/", "/root/", "/proc/", "/var/", "\\\\", "%windir%", "%systemroot%")
-
 
 def _is_allowed_module(module: str) -> bool:
     return any(module == p or module.startswith(p + ".") for p in ALLOWED_MODULE_PREFIXES)
-
-
-def _looks_like_traversal(text: str) -> bool:
-    if not text or len(text) > 4096:
-        return False
-    lowered = text.lower()
-    if any(marker in lowered for marker in _TRAVERSAL_MARKERS):
-        return True
-    if lowered.startswith(_ABSOLUTE_PREFIXES):
-        return True
-    return len(lowered) > 3 and lowered[1:3] == ":\\" and lowered[0].isalpha()
 
 
 def _as_text(value: object) -> str:
@@ -87,7 +74,6 @@ def _as_text(value: object) -> str:
 
 def analyze_pickle_stream(stream: BinaryIO, source: str) -> tuple[list[Finding], list[str]]:
     """Walk one pickle stream and return (findings, errors).
-
     `source` labels where the stream came from, e.g. "archive/data.pkl".
     """
     findings: list[Finding] = []
@@ -112,7 +98,7 @@ def analyze_pickle_stream(stream: BinaryIO, source: str) -> tuple[list[Finding],
             if name in STRING_OPCODES:
                 text = _as_text(arg)
                 recent_strings.append(text)
-                if _looks_like_traversal(text):
+                if looks_like_traversal(text):
                     traversal_strings.append((text, pos))
 
             if name in ("GLOBAL", "INST"):
@@ -274,7 +260,7 @@ def _zip_member_findings(info: zipfile.ZipInfo) -> Iterable[Finding]:
     name = info.filename
     normalised = name.replace("\\", "/")
 
-    if normalised.startswith("/") or ".." in normalised.split("/") or _looks_like_traversal(name):
+    if normalised.startswith("/") or ".." in normalised.split("/") or looks_like_traversal(name):
         yield Finding(
             check="zip.path_traversal",
             severity=Severity.CRITICAL,

@@ -104,6 +104,9 @@ def detect_format(path: Path) -> ModelFormat:
     if _looks_like_safetensors(head, size):
         return ModelFormat.SAFETENSORS
 
+    if path.suffix.lower() == ".safetensors" and len(head) >= 8:
+        return ModelFormat.SAFETENSORS
+
     if head[:1] == b"\x08" and path.suffix.lower() == ".onnx":
         return ModelFormat.ONNX
 

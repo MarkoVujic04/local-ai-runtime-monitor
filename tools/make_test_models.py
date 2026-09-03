@@ -27,6 +27,7 @@ class _SimulatedCommandExecution:
     def __reduce__(self):
         return (os.system, (MARKER,))
 
+
 def _u32(value: int) -> bytes:
     return struct.pack("<I", value)
 
@@ -60,6 +61,73 @@ def build_clean_safetensors() -> bytes:
     return _u64(len(encoded)) + encoded + tensor_data
 
 
+def _gguf_kv_string(key: str, value: str) -> bytes:
+    return _gguf_string(key) + _u32(8) + _gguf_string(value)
+
+
+def _gguf_header(tensor_count: int, kv_count: int, version: int = 3) -> bytes:
+    return b"GGUF" + _u32(version) + _u64(tensor_count) + _u64(kv_count)
+
+
+def build_traversal_gguf() -> bytes:
+    """Metadata value carrying a path-traversal payload."""
+    pairs = [
+        _gguf_kv_string("general.architecture", "llama"),
+        _gguf_kv_string("general.name", "../../../../etc/cron.d/larsm-demo"),
+        _gguf_kv_string("tokenizer.ggml.model", "gpt2"),
+    ]
+    return _gguf_header(0, len(pairs)) + b"".join(pairs)
+
+
+def build_template_injection_gguf() -> bytes:
+    """Chat template attempting a Jinja sandbox escape."""
+    template = (
+        "{% for m in messages %}{{ m.content }}{% endfor %}"
+        "{{ ''.__class__.__mro__[1].__subclasses__() }}"
+    )
+    pairs = [
+        _gguf_kv_string("general.architecture", "llama"),
+        _gguf_kv_string("tokenizer.chat_template", template),
+    ]
+    return _gguf_header(0, len(pairs)) + b"".join(pairs)
+
+
+def build_implausible_count_gguf() -> bytes:
+    """Header claiming four billion metadata entries in a 24-byte file."""
+    return _gguf_header(0, 4_000_000_000)
+
+
+def build_oversized_string_gguf() -> bytes:
+    """A metadata key whose declared length runs past the end of the file."""
+    return _gguf_header(0, 1) + _u64(2**40) + b"general.name"
+
+
+def build_oob_safetensors() -> bytes:
+    """Tensor offsets pointing far beyond the data section."""
+    header = {
+        "weight": {"dtype": "F32", "shape": [4, 4], "data_offsets": [0, 64]},
+        "hidden": {"dtype": "F32", "shape": [1024, 1024], "data_offsets": [64, 4_194_368]},
+    }
+    encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    return _u64(len(encoded)) + encoded + b"\x00" * 64
+
+
+def build_overlapping_safetensors() -> bytes:
+    """Two tensors claiming the same bytes, plus a traversal in metadata."""
+    header = {
+        "__metadata__": {"format": "pt", "source": "..\\..\\windows\\system32\\larsm.txt"},
+        "a": {"dtype": "F32", "shape": [4], "data_offsets": [0, 16]},
+        "b": {"dtype": "F32", "shape": [4], "data_offsets": [8, 24]},
+    }
+    encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    return _u64(len(encoded)) + encoded + b"\x00" * 24
+
+
+def build_huge_header_safetensors() -> bytes:
+    """Header length field claiming a gigabyte in a 40-byte file."""
+    return _u64(1_073_741_824) + b'{"weight":{"dtype":"F32"}}'
+
+
 def build_torch_style_zip(pickle_bytes: bytes, extra_member: str | None = None) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
@@ -88,6 +156,15 @@ def build_samples() -> dict[str, bytes]:
             harmless_pickle, extra_member="../../larsm_escaped.pkl"
         ),
         "truncated.pkl": command_pickle[: len(command_pickle) // 2],
+
+        "traversal_metadata.gguf": build_traversal_gguf(),
+        "template_injection.gguf": build_template_injection_gguf(),
+        "implausible_count.gguf": build_implausible_count_gguf(),
+        "oversized_string.gguf": build_oversized_string_gguf(),
+
+        "oob_offsets.safetensors": build_oob_safetensors(),
+        "overlapping.safetensors": build_overlapping_safetensors(),
+        "huge_header.safetensors": build_huge_header_safetensors(),
     }
 
 

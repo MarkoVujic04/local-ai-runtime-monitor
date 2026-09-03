@@ -14,6 +14,9 @@ from .formats import (
     detect_format,
 )
 
+from .checks.gguf_check import analyze_gguf
+from .checks.safetensors_check import analyze_safetensors
+
 
 def _format_findings(path: Path, detected: ModelFormat) -> list[Finding]:
     findings: list[Finding] = []
@@ -98,14 +101,14 @@ def _format_findings(path: Path, detected: ModelFormat) -> list[Finding]:
                 severity=Severity.INFO,
                 title="Format does not execute code on load",
                 detail=(
-                    f"Detected {detected}. These formats are data containers, which removes the "
-                    "deserialisation-RCE class. Header and metadata parsing arrives in Sprint 2; "
-                    "until then this file has only been format-identified, not inspected."
+                    f"Detected {detected}. These formats are data containers, which removes "
+                    "the deserialisation-RCE class. Header and offset validation is applied "
+                    "separately; this finding covers the format choice only."
                 ),
                 remediation="",
                 evidence={"format": str(detected)},
             )
-        )
+    )
 
     return findings
 
@@ -151,6 +154,14 @@ def scan_file(path: Path) -> ScanResult:
             result.errors.append(f"{path}: {exc}")
     elif detected in (ModelFormat.ZIP_PICKLE, ModelFormat.ZIP_ARCHIVE):
         findings, errors = analyze_zip_container(path)
+        result.findings.extend(findings)
+        result.errors.extend(errors)
+    elif detected is ModelFormat.SAFETENSORS:
+        findings, errors = analyze_safetensors(path, result.size_bytes)
+        result.findings.extend(findings)
+        result.errors.extend(errors)
+    elif detected is ModelFormat.GGUF:
+        findings, errors = analyze_gguf(path, result.size_bytes)
         result.findings.extend(findings)
         result.errors.extend(errors)
 
